@@ -1,30 +1,22 @@
 import duckdb
+import openai
 import pandas as pd
-print(pd.__version__)
 import streamlit as st
-from transformers import pipeline
 
 # 1. Page Configuration
 st.set_page_config(page_title="AI Management Assistant", layout="wide")
 st.title("📊 Management CSV Data Assistant")
 
-# 2. Load Light Hugging Face Model for Text & SQL Tasks
-@st.cache_resource
-def load_llm():
-    # Using small text generation pipeline suitable for local CPU execution
-    # return pipeline(
-    #     "text-generation",
-    #     model="google/flan-t5-base",
-    #     max_new_tokens=250
-    # )
+# 2. Sidebar API Key Input & Data Upload
+st.sidebar.header("Configuration")
+api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
-    return pipeline(
-        "text-generation", 
-        model="openbmb/MiniCPM5-2B-DSpark",
-        return_full_text=False
-    )
+if not api_key:
+    st.info("Please enter your OpenAI API Key in the sidebar to start.")
+    st.stop()
 
-llm = load_llm()
+# Initialize OpenAI client
+client = openai.OpenAI(api_key=api_key)
 
 # 3. Data Ingestion & SQL Preparation
 def process_data(uploaded_file):
@@ -40,42 +32,52 @@ def process_data(uploaded_file):
     
     return con, df
 
-# 4. Generate SQL from Plain English Question
-def generate_sql(user_question):
-    prompt = f"""Task: Convert user question into SQL query for DuckDB.
-Table: sales_data (date, region, category, store_id, revenue, cost)
-Rule: Return ONLY valid SQL query. No explanations.
+# 4. Generate SQL from Plain English Question using OpenAI
+def generate_sql(user_question, df_columns):
+    system_prompt = f"""You are an expert SQL generator for DuckDB. 
+Table name: sales_data
+Columns and types: {df_columns}
 
-Question: {user_question}
-SQL Query:"""
+Rule: Return ONLY a valid executable SQL query. Do not wrap in markdown code blocks like ```sql or add explanations."""
 
-    response = llm(prompt)[0]["generated_text"].strip()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Write a SQL query to answer this question: {user_question}"}
+        ],
+        temperature=0.0
+    )
     
-    # Fallback SQL logic if prompt fails on specific edge cases
-    q_lower = user_question.lower()
-    if "top 3" in q_lower and "east" in q_lower and "category" in q_lower:
-        return "SELECT category, SUM(revenue) AS total_revenue FROM sales_data WHERE region = 'East' GROUP BY category ORDER BY total_revenue DESC LIMIT 3;"
-    elif "region" in q_lower and "last quarter" in q_lower:
-        return "SELECT region, SUM(revenue) AS total_revenue FROM sales_data WHERE date >= '2025-04-01' GROUP BY region ORDER BY total_revenue DESC;"
-    
-    return response if response.startswith("SELECT") else ""
+    sql_query = response.choices[0].message.content.strip()
+    return sql_query.replace("```sql", "").replace("```", "").strip()
 
 # 5. Generate Natural Language Summary from Query Results
 def summarize_results(user_question, df_result):
     data_str = df_result.to_string(index=False)
     
-    prompt = f"""Task: Answer the user question in plain, simple business English using the provided data table.
-    User Question: {user_question}
-    Data Table: {data_str}
-    Business Insight:"""
+    system_prompt = "You are a concise business analyst. Explain the query results clearly in plain English, highlighting key insights for management."
 
-    summary = llm(prompt)[0]["generated_text"].strip()
-    return summary
+    user_prompt = f"""User Question: {user_question}
+
+Data Table Result:
+{data_str}
+
+Provide a clear executive answer and key takeaways based ONLY on the data above."""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=0.2
+    )
+    
+    return response.choices[0].message.content.strip()
 
 # 6. UI & Chat Engine
-st.sidebar.header("Data Upload")
 uploaded_file = 'sales_data.csv'
-
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -98,14 +100,14 @@ if user_prompt := st.chat_input("Ask a question about your sales data..."):
 
     with st.chat_message("assistant"):
         try:
-            # Step A: Generate & Execute SQL
-            sql_query = generate_sql(user_prompt)
+            # Step A: Generate SQL using OpenAI
+            sql_query = generate_sql(user_prompt, dict(df.dtypes))
             result_df = con.execute(sql_query).df()
 
-            # Step B: Generate Plain English Interpretation
+            # Step B: Generate Plain English Interpretation using OpenAI
             summary_text = summarize_results(user_prompt, result_df)
 
-            # Format Final Response
+            # Format Response
             response_markdown = f"""{summary_text}
 
 ---
