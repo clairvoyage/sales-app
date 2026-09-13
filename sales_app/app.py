@@ -1,11 +1,11 @@
 import streamlit as st
-from data_engine import process_data, generate_sql, summarize_results 
+from data_engine import process_data, generate_sql
 
-# 1. Page Configuration
+# Page Configuration
 st.set_page_config(page_title="AI Management Assistant", layout="wide")
 st.title("Management CSV Data Assistant")
 
-# 2. UI & Chat Engine
+# UI & Chat Engine
 uploaded_file = 'sales_data.csv'
 
 if "messages" not in st.session_state:
@@ -16,7 +16,6 @@ con, df = process_data(uploaded_file)
 # Render Chat History
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
         if "df" in msg:
             st.dataframe(msg["df"])
 
@@ -28,15 +27,12 @@ if user_prompt := st.chat_input("Ask a question about your sales data..."):
 
     with st.chat_message("assistant"):
         try:
-            # Step A: Generate SQL using OpenAI
+            # Generate SQL using OpenAI
             sql_query = generate_sql(user_prompt, dict(df.dtypes))
             result_df = con.execute(sql_query).df()
 
-            # Step B: Generate Plain English Interpretation using OpenAI
-            summary_text = summarize_results(user_prompt, result_df)
-
             # Format Response
-            response_markdown = f"""{summary_text}
+            response_markdown = f"""
 
 ---
 **SQL Executed:** `{sql_query}`"""
@@ -46,7 +42,6 @@ if user_prompt := st.chat_input("Ask a question about your sales data..."):
 
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": response_markdown,
                 "df": result_df
             })
 
