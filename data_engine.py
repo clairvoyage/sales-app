@@ -1,12 +1,10 @@
-import os
 import duckdb
 import openai
 import pandas as pd
-from dotenv import load_dotenv
+import streamlit as st
 
 # Initialize OpenAI client
-load_dotenv()
-client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Data Ingestion & SQL Preparation
 def process_data(uploaded_file):
