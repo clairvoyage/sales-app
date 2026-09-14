@@ -2,7 +2,7 @@ import streamlit as st
 from data_engine import process_data, generate_sql
 
 # Page Configuration
-st.set_page_config(page_title="AI Management Assistant", layout="wide")
+st.set_page_config(page_title="AI Management Assistant", layout="centered")
 st.title("AI Management Assistant")
 
 # UI & Chat Engine
