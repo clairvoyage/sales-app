@@ -16,6 +16,8 @@ con, df = process_data(uploaded_file)
 # Render Chat History
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
+        if "content" in msg:
+            st.markdown(msg["content"])
         if "df" in msg:
             st.dataframe(msg["df"])
 
