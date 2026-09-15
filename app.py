@@ -18,6 +18,9 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if "content" in msg:
             st.markdown(msg["content"])
+        if "sql" in msg:
+            sql_query = msg["sql"]
+            st.markdown(f"**SQL Executed:** `{sql_query}`")
         if "df" in msg:
             st.dataframe(msg["df"])
 
@@ -36,7 +39,6 @@ if user_prompt := st.chat_input("Ask a question about your sales data..."):
             # Format Response
             response_markdown = f"""
 
----
 **SQL Executed:** `{sql_query}`"""
 
             st.markdown(response_markdown)
@@ -44,6 +46,7 @@ if user_prompt := st.chat_input("Ask a question about your sales data..."):
 
             st.session_state.messages.append({
                 "role": "assistant",
+                "sql": sql_query,
                 "df": result_df
             })
 
